@@ -12,7 +12,6 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import javax.crypto.spec.PSource;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -22,7 +21,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class FindSecBugsScanner extends BugAuditScanner{
+public final class FindSecBugsScanner extends BugAuditScanner {
 
     private static transient final Lang lang = Lang.Java;
     private static transient final String tool = "FindSecBugs";
@@ -52,17 +51,16 @@ public final class FindSecBugsScanner extends BugAuditScanner{
         pw.close();
     }
 
-    private void modifyXMLsForEnvironment() throws  FileNotFoundException,IOException
-    {
+    private void modifyXMLsForEnvironment() throws FileNotFoundException, IOException {
         //The corresponding two files is used to tell spotbugs to report only security bugs and not others!
         File excludeFile = new File("spotbugs-security-exclude.xml");
         String excludeFileContents = "<FindBugsFilter>\n" +
                 "</FindBugsFilter>";
 
-        if(!excludeFile.exists())
-            writeToFile(excludeFileContents,excludeFile);
+        if (!excludeFile.exists())
+            writeToFile(excludeFileContents, excludeFile);
         else
-            System.out.println("File already present!");
+            System.out.println("Include file already present!");
 
         File includeFile = new File("spotbugs-security-include.xml");
         String includeFileContents = "<FindBugsFilter>\n" +
@@ -71,16 +69,15 @@ public final class FindSecBugsScanner extends BugAuditScanner{
                 "    </Match>\n" +
                 "</FindBugsFilter>";
 
-        if(!includeFile.exists())
-            writeToFile(includeFileContents,includeFile);
+        if (!includeFile.exists())
+            writeToFile(includeFileContents, includeFile);
         else
-            System.out.println("File already present!");
+            System.out.println("Include file already present!");
 
         //Used to append spotbugs maven plugin to pom.xml file
         File pomFile = new File("pom.xml");
-        FileWriter fw_pomFile = new FileWriter(pomFile,true);
-        if(pomFile.exists())
-        {
+        FileWriter fw_pomFile = new FileWriter(pomFile, true);
+        if (pomFile.exists()) {
             fw_pomFile.write("<build>\n" +
                     "    <plugins>\n" +
                     "        <plugin>\n" +
@@ -105,8 +102,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
                     "        </plugin>\n" +
                     "    </plugins>\n" +
                     "</build>");
-        }
-        else
+        } else
             throw new FileNotFoundException("Pom XML Not found!");
 
         fw_pomFile.close();
@@ -122,16 +118,14 @@ public final class FindSecBugsScanner extends BugAuditScanner{
         Pattern pattern = Pattern.compile("<module>(.*)</module>"); //Example: <module>Billing</module>
         Matcher matcher = pattern.matcher(contents);
 
-        if(matcher.find())
-        {
-            while(matcher.find()) {
+        if (matcher.find()) {
+            while (matcher.find()) {
                 String module = matcher.group(1);
-                String path =  module + "/target/spotbugsXml.xml";
+                String path = module + "/target/spotbugsXml.xml";
 
                 modulePaths.add(path);
             }
-        }
-        else {      //Some projects do not have any modules and we just build from parent pom.xml file.
+        } else {      //Some projects do not have any modules and we just build from parent pom.xml file.
             String path = "target/spotbugsXml.xml";
             modulePaths.add(path);
         }
@@ -139,8 +133,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
         return modulePaths;
     }
 
-    private Integer getSeverity(int priority,int rank)
-    {
+    private Integer getSeverity(int priority, int rank) {
         Integer[][] severityMatrix = {
                 {1, 2, 2},
                 {2, 2, 3},
@@ -148,7 +141,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
                 {3, 4, 4}
         };
 
-        Integer index1 = 0, index2 = 0;
+        int index1 = 0, index2 = 0;
         if (rank > 1 && rank <= 4)
             index1 = 0;
         else if (rank >= 5 && rank <= 9)
@@ -220,7 +213,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
 
                 Integer priority = Integer.parseInt(findBugs.priority);
                 Integer rank = Integer.parseInt(eElement.getAttribute("rank"));
-                findBugs.severity = getSeverity(priority,rank); //Get severity using risk matrix
+                findBugs.severity = getSeverity(priority, rank); //Get severity using risk matrix
 
                 bugsList.add(findBugs);
             }
@@ -229,7 +222,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
         return bugsList;
     }
 
-    public String getDescription(FindSecBugs findBugs){
+    public String getDescription(FindSecBugs findBugs) {
         StringBuilder description = new StringBuilder();
 
         description.append("The following insecure code bugs were found in ").append("**[").append(findBugs.filePath).append("](").append(this.getBugAuditScanResult().getRepo().getWebUrl()).append("/tree/").append(this.getBugAuditScanResult().getRepo().getCommit()).append("/").append(findBugs.filePath).append("):**\n");
@@ -251,11 +244,11 @@ public final class FindSecBugsScanner extends BugAuditScanner{
     private void processFindSecBugsResult() throws IOException, SAXException, ParserConfigurationException, BugAuditException {
         List<String> modulePaths = getModulePaths();    //Find the modules from parent pom.xml file
 
-        for(String module : modulePaths) {
+        for (String module : modulePaths) {
 
             List<FindSecBugs> bugsList = getXMLValuesForBug(module);    //Get Bug details from XML
 
-            for(FindSecBugs issue : bugsList) {
+            for (FindSecBugs issue : bugsList) {
                 String title = "FindSecBugs (" + issue.bugType + ") found in " + issue.filePath + getBugAuditScanResult().getRepo();//Example: FindSecBugs (OBJECT_DESERIALIZATION) found in org/owasp/webgoat/plugin/InsecureDeserializationTask.javabugaudit/bugaudit-cli
                 Bug bug = new Bug(title, issue.severity);   //Create new bug using title and severity!
                 bug.setDescription(new BugAuditContent(this.getDescription(issue)));
@@ -272,7 +265,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
         modifyXMLsForEnvironment(); //Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
         String spotBugsResponse = runCommand("mvn spotbugs:spotbugs");  //The command should run from root pom.xml file location
 
-        if(!spotBugsResponse.equalsIgnoreCase("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
+        if (!spotBugsResponse.equalsIgnoreCase("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
             throw new BugAuditException("SpotBugs failed!");
     }
 
@@ -287,7 +280,7 @@ public final class FindSecBugsScanner extends BugAuditScanner{
     }
 
     @Override
-    protected void scan() throws Exception {
+    public void scan() throws Exception {
         if (!isParserOnly()) {
             runFindSecBugs();   //Run the plugin and get XML result stored in target/SpotbugsXml.xml file
         }

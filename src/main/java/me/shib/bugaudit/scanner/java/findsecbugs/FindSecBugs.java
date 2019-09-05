@@ -40,7 +40,7 @@ public class FindSecBugs {
         return lineNumber;
     }
 
-    public Integer getSeverity(){
+    public Integer getSeverity() {
         return severity;
     }
 
