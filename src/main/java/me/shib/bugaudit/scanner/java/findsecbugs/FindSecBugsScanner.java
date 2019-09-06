@@ -16,6 +16,9 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -76,11 +79,22 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
         //Used to append spotbugs maven plugin to pom.xml file
         File pomFile = new File("pom.xml");
-        FileWriter fw_pomFile = new FileWriter(pomFile, true);
-        if (pomFile.exists()) {
-            fw_pomFile.write("<build>\n" +
-                    "    <plugins>\n" +
-                    "        <plugin>\n" +
+        if(pomFile.exists())
+        {
+            List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8 );
+
+            int position=0;
+
+            for(String str: lines)
+            {
+                if(str.trim().contains("<plugins>"))
+                {
+                    position = lines.indexOf(str);
+                    break;
+                }
+            }
+
+            String pluginStr = "<plugin>\n" +
                     "            <groupId>com.github.spotbugs</groupId>\n" +
                     "            <artifactId>spotbugs-maven-plugin</artifactId>\n" +
                     "            <version>3.1.12</version>\n" +
@@ -99,13 +113,13 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     "                    </plugin>\n" +
                     "                </plugins>\n" +
                     "            </configuration>\n" +
-                    "        </plugin>\n" +
-                    "    </plugins>\n" +
-                    "</build>");
-        } else
-            throw new FileNotFoundException("Pom XML Not found!");
+                    "        </plugin>";
 
-        fw_pomFile.close();
+            lines.add(position+1, pluginStr);
+            Files.write(Paths.get("pom.xml"), lines, StandardCharsets.UTF_8);
+        }
+        else
+            throw new FileNotFoundException("Pom XML Not found!");
     }
 
     private List<String> getModulePaths() throws IOException {
@@ -265,7 +279,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         modifyXMLsForEnvironment(); //Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
         String spotBugsResponse = runCommand("mvn spotbugs:spotbugs");  //The command should run from root pom.xml file location
 
-        if (!spotBugsResponse.equalsIgnoreCase("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
+        if (!spotBugsResponse.contains("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
             throw new BugAuditException("SpotBugs failed!");
     }
 
