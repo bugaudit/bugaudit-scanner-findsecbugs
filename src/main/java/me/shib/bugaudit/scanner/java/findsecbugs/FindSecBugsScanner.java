@@ -56,7 +56,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
     private void modifyXMLsForEnvironment() throws FileNotFoundException, IOException {
         //The corresponding two files is used to tell spotbugs to report only security bugs and not others!
-        File excludeFile = new File("spotbugs-security-exclude.xml");
+        File excludeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-exclude.xml");
         String excludeFileContents = "<FindBugsFilter>\n" +
                 "</FindBugsFilter>";
 
@@ -65,7 +65,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         else
             System.out.println("Include file already present!");
 
-        File includeFile = new File("spotbugs-security-include.xml");
+        File includeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-include.xml");
         String includeFileContents = "<FindBugsFilter>\n" +
                 "    <Match>\n" +
                 "        <Bug category=\"SECURITY\"/>\n" +
@@ -78,7 +78,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
             System.out.println("Include file already present!");
 
         //Used to append spotbugs maven plugin to pom.xml file
-        File pomFile = new File("pom.xml");
+        File pomFile = new File(getScanDirectory() + File.separator + "pom.xml");
         if(pomFile.exists())
         {
             List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8 );
@@ -126,7 +126,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         // A root pom.xml file is present with all the modules (projects) that has to be built. This function will get all the projects name using regex.
         List<String> modulePaths = new ArrayList<String>(); //modulePaths contain all the modules of the project that we have to run findsecbugs for
 
-        File file = new File("pom.xml");
+        File file = new File(getScanDirectory() + File.separator + "pom.xml");
         String contents = readFromFile(file);
 
         Pattern pattern = Pattern.compile("<module>(.*)</module>"); //Example: <module>Billing</module>
@@ -135,12 +135,12 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         if (matcher.find()) {
             while (matcher.find()) {
                 String module = matcher.group(1);
-                String path = module + "/target/spotbugsXml.xml";
+                String path = getScanDirectory() + File.separator + module + "/target/spotbugsXml.xml";
 
                 modulePaths.add(path);
             }
         } else {      //Some projects do not have any modules and we just build from parent pom.xml file.
-            String path = "target/spotbugsXml.xml";
+            String path = getScanDirectory() + File.separator + "target/spotbugsXml.xml";
             modulePaths.add(path);
         }
 
