@@ -66,6 +66,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
             System.out.println("Include file already present!");
 
         File includeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-include.xml");
+        System.out.println(includeFile.getAbsolutePath());
         String includeFileContents = "<FindBugsFilter>\n" +
                 "    <Match>\n" +
                 "        <Bug category=\"SECURITY\"/>\n" +
@@ -79,6 +80,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
         //Used to append spotbugs maven plugin to pom.xml file
         File pomFile = new File(getScanDirectory() + File.separator + "pom.xml");
+        System.out.println(pomFile.getAbsolutePath());
         if(pomFile.exists())
         {
             List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8 );
@@ -116,7 +118,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     "        </plugin>";
 
             lines.add(position+1, pluginStr);
-            Files.write(Paths.get("pom.xml"), lines, StandardCharsets.UTF_8);
+            Files.write(Paths.get(getScanDirectory() + File.separator + "pom.xml"), lines, StandardCharsets.UTF_8);
         }
         else
             throw new FileNotFoundException("Pom XML Not found!");
