@@ -4,9 +4,19 @@ variables:
   MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
 
-Deploying to Bintray:
-  stage: deploy
+stages:
+  - "Maven Build"
+  - "Downstream Triggers"
+
+Publishing to Bintray:
+  stage: "Maven Build"
   script:
     - mvn $MAVEN_CLI_OPTS clean deploy
+  only:
+    - master
+
+BugAudit CLI Builder:
+  stage: "Downstream Triggers"
+  trigger: bugaudit/bugaudit-cli
   only:
     - master

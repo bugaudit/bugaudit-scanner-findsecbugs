@@ -80,17 +80,16 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
         //Used to append spotbugs maven plugin to pom.xml file
         File pomFile = new File(getScanDirectory() + File.separator + "pom.xml");
+
         System.out.println(pomFile.getAbsolutePath());
         if(pomFile.exists())
         {
             List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8 );
 
-            int position=0;
+            int position = 0;
 
-            for(String str: lines)
-            {
-                if(str.trim().contains("<plugins>"))
-                {
+            for (String str : lines) {
+                if (str.trim().contains("<plugins>")) {
                     position = lines.indexOf(str);
                     break;
                 }
