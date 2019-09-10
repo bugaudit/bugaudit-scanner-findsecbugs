@@ -1,5 +1,6 @@
 package me.shib.bugaudit.scanner.java.findsecbugs;
 
+import com.sun.org.apache.xerces.internal.impl.xpath.regex.Match;
 import me.shib.bugaudit.commons.BugAuditContent;
 import me.shib.bugaudit.commons.BugAuditException;
 import me.shib.bugaudit.scanner.Bug;
@@ -37,7 +38,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         this.result = getBugAuditScanResult();
     }
 
-    private String readFromFile(File file) throws IOException {
+    protected String readFromFile(File file) throws IOException {
         StringBuilder contentBuilder = new StringBuilder();
         BufferedReader br = new BufferedReader(new FileReader(file));
         String line;
@@ -48,7 +49,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         return contentBuilder.toString();
     }
 
-    private void writeToFile(String content, File file) throws FileNotFoundException {
+    protected void writeToFile(String content, File file) throws FileNotFoundException {
         PrintWriter pw = new PrintWriter(file);
         pw.append(content);
         pw.close();
@@ -277,8 +278,25 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     private void runFindSecBugs() throws BugAuditException, InterruptedException, SAXException, ParserConfigurationException, IOException {
         System.out.println("Running FindSecBugs!\n");
 
-        modifyXMLsForEnvironment(); //Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
-        String spotBugsResponse = runCommand("mvn spotbugs:spotbugs");  //The command should run from root pom.xml file location
+        modifyXMLsForEnvironment();//Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
+        String buildScript = getBuildScript();
+        String command="",extraArgument;
+        if(buildScript == null)
+            extraArgument="";
+        else {
+            Pattern pattern = Pattern.compile("mvn clean install(.*)");
+            Matcher matcher = pattern.matcher(buildScript);
+
+            if (matcher.find()) {
+                extraArgument = matcher.group(1);
+            } else {
+                extraArgument = "";
+            }
+        }
+
+        command = "mvn spotbugs:spotbugs" + extraArgument;
+
+        String spotBugsResponse = runCommand(command);  //The command should run from root pom.xml file location
 
         if (!spotBugsResponse.contains("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
             throw new BugAuditException("SpotBugs failed!");
