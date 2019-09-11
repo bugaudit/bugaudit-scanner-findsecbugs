@@ -29,6 +29,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
     private static transient final Lang lang = Lang.Java;
     private static transient final String tool = "FindSecBugs";
+    private static transient final String thresholdLevel = "FINDSECBUGS_CONFIDENCE_LEVEL";
 
     private BugAuditScanResult result;
 
@@ -96,13 +97,19 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 }
             }
 
+            String confidenceLevel = System.getenv(thresholdLevel);
+            if(confidenceLevel == null || confidenceLevel.equals(""))
+                confidenceLevel = "Low";
+            else
+                confidenceLevel = confidenceLevel.substring(0,1).toUpperCase() + confidenceLevel.substring(1).toLowerCase();
+
             String pluginStr = "<plugin>\n" +
                     "            <groupId>com.github.spotbugs</groupId>\n" +
                     "            <artifactId>spotbugs-maven-plugin</artifactId>\n" +
                     "            <version>3.1.12</version>\n" +
                     "            <configuration>\n" +
                     "                <effort>Max</effort>\n" +
-                    "                <threshold>Low</threshold>\n" +
+                    "                <threshold>"+confidenceLevel+"</threshold>\n" +
                     "                <failOnError>true</failOnError>\n" +
                     "                <maxHeap>2048</maxHeap>\n" +
                     "                <includeFilterFile>spotbugs-security-include.xml</includeFilterFile>\n" +
@@ -188,14 +195,16 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
     private List<FindSecBugs> getXMLValuesForBug(String modulePath) throws ParserConfigurationException, IOException, SAXException {
         File bugXML = new File(modulePath);
+        List<FindSecBugs> bugsList = new ArrayList<FindSecBugs>();
+
+        if(!bugXML.exists())
+            return bugsList;
 
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
 
         Document doc = dBuilder.parse(bugXML);
         doc.getDocumentElement().normalize();
-
-        List<FindSecBugs> bugsList = new ArrayList<FindSecBugs>();
 
         NodeList nList = doc.getElementsByTagName("Project");
 
@@ -219,6 +228,9 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 NodeList nList1 = eElement.getElementsByTagName("SourceLine");
                 Node nNode1 = nList1.item(2);
                 Element eElement1 = (Element) nNode1;
+
+                if(eElement1 == null)
+                    continue;
 
                 findBugs.className = eElement1.getAttribute("classname");
                 findBugs.filePath = eElement1.getAttribute("sourcepath");
