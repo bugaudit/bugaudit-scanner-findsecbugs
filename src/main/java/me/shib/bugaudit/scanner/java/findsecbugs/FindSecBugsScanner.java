@@ -1,6 +1,5 @@
 package me.shib.bugaudit.scanner.java.findsecbugs;
 
-import com.sun.org.apache.xerces.internal.impl.xpath.regex.Match;
 import me.shib.bugaudit.commons.BugAuditContent;
 import me.shib.bugaudit.commons.BugAuditException;
 import me.shib.bugaudit.scanner.Bug;
@@ -16,7 +15,9 @@ import org.xml.sax.SAXException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -29,7 +30,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
     private static transient final Lang lang = Lang.Java;
     private static transient final String tool = "FindSecBugs";
-    private static transient final String thresholdLevel = "FINDSECBUGS_CONFIDENCE_LEVEL";
+    private static transient final String findSecBugsThresholdLevel = "BUGAUDIT_FINDSECBUGS_CONFIDENCE_LEVEL";
 
     private BugAuditScanResult result;
 
@@ -39,24 +40,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         this.result = getBugAuditScanResult();
     }
 
-    protected String readFromFile(File file) throws IOException {
-        StringBuilder contentBuilder = new StringBuilder();
-        BufferedReader br = new BufferedReader(new FileReader(file));
-        String line;
-        while ((line = br.readLine()) != null) {
-            contentBuilder.append(line).append("\n");
-        }
-        br.close();
-        return contentBuilder.toString();
-    }
-
-    protected void writeToFile(String content, File file) throws FileNotFoundException {
-        PrintWriter pw = new PrintWriter(file);
-        pw.append(content);
-        pw.close();
-    }
-
-    private void modifyXMLsForEnvironment() throws FileNotFoundException, IOException {
+    private void modifyXMLsForEnvironment() throws IOException {
         //The corresponding two files is used to tell spotbugs to report only security bugs and not others!
         File excludeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-exclude.xml");
         String excludeFileContents = "<FindBugsFilter>\n" +
@@ -84,9 +68,8 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         File pomFile = new File(getScanDirectory() + File.separator + "pom.xml");
 
         System.out.println(pomFile.getAbsolutePath());
-        if(pomFile.exists())
-        {
-            List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8 );
+        if (pomFile.exists()) {
+            List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8);
 
             int position = 0;
 
@@ -97,11 +80,11 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 }
             }
 
-            String confidenceLevel = System.getenv(thresholdLevel);
-            if(confidenceLevel == null || confidenceLevel.equals(""))
+            String confidenceLevel = System.getenv(findSecBugsThresholdLevel);
+            if (confidenceLevel == null || confidenceLevel.isEmpty())
                 confidenceLevel = "Low";
             else
-                confidenceLevel = confidenceLevel.substring(0,1).toUpperCase() + confidenceLevel.substring(1).toLowerCase();
+                confidenceLevel = confidenceLevel.substring(0, 1).toUpperCase() + confidenceLevel.substring(1).toLowerCase();
 
             String pluginStr = "<plugin>\n" +
                     "            <groupId>com.github.spotbugs</groupId>\n" +
@@ -109,7 +92,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     "            <version>3.1.12</version>\n" +
                     "            <configuration>\n" +
                     "                <effort>Max</effort>\n" +
-                    "                <threshold>"+confidenceLevel+"</threshold>\n" +
+                    "                <threshold>" + confidenceLevel + "</threshold>\n" +
                     "                <failOnError>true</failOnError>\n" +
                     "                <maxHeap>2048</maxHeap>\n" +
                     "                <includeFilterFile>spotbugs-security-include.xml</includeFilterFile>\n" +
@@ -124,10 +107,9 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     "            </configuration>\n" +
                     "        </plugin>";
 
-            lines.add(position+1, pluginStr);
+            lines.add(position + 1, pluginStr);
             Files.write(Paths.get(getScanDirectory() + File.separator + "pom.xml"), lines, StandardCharsets.UTF_8);
-        }
-        else
+        } else
             throw new FileNotFoundException("Pom XML Not found!");
     }
 
@@ -197,7 +179,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         File bugXML = new File(modulePath);
         List<FindSecBugs> bugsList = new ArrayList<FindSecBugs>();
 
-        if(!bugXML.exists())
+        if (!bugXML.exists())
             return bugsList;
 
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
@@ -229,7 +211,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 Node nNode1 = nList1.item(2);
                 Element eElement1 = (Element) nNode1;
 
-                if(eElement1 == null)
+                if (eElement1 == null)
                     continue;
 
                 findBugs.className = eElement1.getAttribute("classname");
@@ -292,9 +274,9 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
         modifyXMLsForEnvironment();//Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
         String buildScript = getBuildScript();
-        String command="",extraArgument;
-        if(buildScript == null)
-            extraArgument="";
+        String command = "", extraArgument;
+        if (buildScript == null)
+            extraArgument = "";
         else {
             Pattern pattern = Pattern.compile("mvn clean install(.*)");
             Matcher matcher = pattern.matcher(buildScript);
