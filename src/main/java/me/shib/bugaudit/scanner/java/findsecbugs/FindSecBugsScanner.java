@@ -41,16 +41,13 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     }
 
     private void modifyXMLsForEnvironment() throws IOException {
-        //The corresponding two files is used to tell spotbugs to report only security bugs and not others!
         File excludeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-exclude.xml");
         String excludeFileContents = "<FindBugsFilter>\n" +
                 "</FindBugsFilter>";
-
         if (!excludeFile.exists())
             writeToFile(excludeFileContents, excludeFile);
         else
             System.out.println("Include file already present!");
-
         File includeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-include.xml");
         System.out.println(includeFile.getAbsolutePath());
         String includeFileContents = "<FindBugsFilter>\n" +
@@ -58,34 +55,26 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 "        <Bug category=\"SECURITY\"/>\n" +
                 "    </Match>\n" +
                 "</FindBugsFilter>";
-
         if (!includeFile.exists())
             writeToFile(includeFileContents, includeFile);
         else
             System.out.println("Include file already present!");
-
-        //Used to append spotbugs maven plugin to pom.xml file
         File pomFile = new File(getScanDirectory() + File.separator + "pom.xml");
-
         System.out.println(pomFile.getAbsolutePath());
         if (pomFile.exists()) {
             List<String> lines = Files.readAllLines(pomFile.toPath(), StandardCharsets.UTF_8);
-
             int position = 0;
-
             for (String str : lines) {
                 if (str.trim().contains("<plugins>")) {
                     position = lines.indexOf(str);
                     break;
                 }
             }
-
             String confidenceLevel = System.getenv(findSecBugsThresholdLevel);
             if (confidenceLevel == null || confidenceLevel.isEmpty())
                 confidenceLevel = "Low";
             else
                 confidenceLevel = confidenceLevel.substring(0, 1).toUpperCase() + confidenceLevel.substring(1).toLowerCase();
-
             String pluginStr = "<plugin>\n" +
                     "            <groupId>com.github.spotbugs</groupId>\n" +
                     "            <artifactId>spotbugs-maven-plugin</artifactId>\n" +
@@ -114,15 +103,11 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     }
 
     private List<String> getModulePaths() throws IOException {
-        // A root pom.xml file is present with all the modules (projects) that has to be built. This function will get all the projects name using regex.
-        List<String> modulePaths = new ArrayList<String>(); //modulePaths contain all the modules of the project that we have to run findsecbugs for
-
+        List<String> modulePaths = new ArrayList<>();
         File file = new File(getScanDirectory() + File.separator + "pom.xml");
         String contents = readFromFile(file);
-
-        Pattern pattern = Pattern.compile("<module>(.*)</module>"); //Example: <module>Billing</module>
+        Pattern pattern = Pattern.compile("<module>(.*)</module>");
         Matcher matcher = pattern.matcher(contents);
-
         if (matcher.find()) {
             while (matcher.find()) {
                 String module = matcher.group(1);
@@ -130,7 +115,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
                 modulePaths.add(path);
             }
-        } else {      //Some projects do not have any modules and we just build from parent pom.xml file.
+        } else {
             String path = getScanDirectory() + File.separator + "target/spotbugsXml.xml";
             modulePaths.add(path);
         }
@@ -146,153 +131,114 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 {3, 4, 4}
         };
 
-        int index1 = 0, index2 = 0;
-        if (rank > 1 && rank <= 4)
-            index1 = 0;
-        else if (rank >= 5 && rank <= 9)
+        int index1 = 0;
+        if (rank >= 5 && rank <= 9)
             index1 = 1;
         else if (rank >= 10 && rank <= 14)
             index1 = 2;
         else if (rank >= 15 && rank <= 20)
             index1 = 3;
-
-        index2 = priority - 1;
-
+        int index2 = priority - 1;
         return severityMatrix[index1][index2];
     }
 
-    /*Example of XML Contents:
-    <Project projectName="insecure-deserialization">...</Project>
-    <BugInstance instanceOccurrenceNum="0" instanceHash="be849f1dc19e86fbed90c49263a4ce1d" cweid="502" rank="10" abbrev="SECOBDES" category="SECURITY" priority="1" type="OBJECT_DESERIALIZATION" instanceOccurrenceMax="0">
-    <ShortMessage>Object deserialization is used in {1}</ShortMessage>
-    <LongMessage> Object deserialization is used in org.owasp.webgoat.plugin.InsecureDeserializationTask.completed(String) </LongMessage>
-    <Class classname="org.owasp.webgoat.plugin.InsecureDeserializationTask" primary="true">
-    <SourceLine classname="org.owasp.webgoat.plugin.InsecureDeserializationTask" start="51" end="88" sourcepath="org/owasp/webgoat/plugin/InsecureDeserializationTask.java" sourcefile="InsecureDeserializationTask.java">
-    <Message>At InsecureDeserializationTask.java:[lines 51-88]</Message>
-    </SourceLine> <Message> In class org.owasp.webgoat.plugin.InsecureDeserializationTask </Message> </Class>
-    <Method isStatic="false" classname="org.owasp.webgoat.plugin.InsecureDeserializationTask" signature="(Ljava/lang/String;)Lorg/owasp/webgoat/assignments/AttackResult;" name="completed" primary="true"> <SourceLine endBytecode="502" classname="org.owasp.webgoat.plugin.InsecureDeserializationTask" start="64" end="88" sourcepath="org/owasp/webgoat/plugin/InsecureDeserializationTask.java" sourcefile="InsecureDeserializationTask.java" startBytecode="0"/>
-    <Message> In method org.owasp.webgoat.plugin.InsecureDeserializationTask.completed(String) </Message></Method>
-    <SourceLine endBytecode="65" classname="org.owasp.webgoat.plugin.InsecureDeserializationTask" start="74" end="74" sourcepath="org/owasp/webgoat/plugin/InsecureDeserializationTask.java" sourcefile="InsecureDeserializationTask.java" startBytecode="65" primary="true">
-    <Message>At InsecureDeserializationTask.java:[line 74]</Message> </SourceLine> </BugInstance>*/
-
-    private List<FindSecBugs> getXMLValuesForBug(String modulePath) throws ParserConfigurationException, IOException, SAXException {
+    private List<FindSecBugsWarning> getXMLValuesForBug(String modulePath) throws ParserConfigurationException, IOException, SAXException {
         File bugXML = new File(modulePath);
-        List<FindSecBugs> bugsList = new ArrayList<FindSecBugs>();
-
+        List<FindSecBugsWarning> bugsList = new ArrayList<>();
         if (!bugXML.exists())
             return bugsList;
-
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-
         Document doc = dBuilder.parse(bugXML);
         doc.getDocumentElement().normalize();
-
         NodeList nList = doc.getElementsByTagName("Project");
-
         Node nNode = nList.item(0);
         Element nElement = (Element) nNode;
-
         nList = doc.getElementsByTagName("BugInstance");
         for (int temp = 0; temp < nList.getLength(); temp++) {
             nNode = nList.item(temp);
-
             if (nNode.getNodeType() == Node.ELEMENT_NODE) {
                 Element eElement = (Element) nNode;
-
-                FindSecBugs findBugs = new FindSecBugs();   //Class object which contains the details of a bug!
-
-                findBugs.moduleName = nElement.getAttribute("projectName");
-                findBugs.bugType = eElement.getAttribute("type");
-                findBugs.instanceHash = eElement.getAttribute("instanceHash");
-                findBugs.message = eElement.getElementsByTagName("LongMessage").item(0).getTextContent();
-
+                FindSecBugsWarning warning = new FindSecBugsWarning();
+                warning.moduleName = nElement.getAttribute("projectName");
+                warning.bugType = eElement.getAttribute("type");
+                warning.instanceHash = eElement.getAttribute("instanceHash");
+                warning.message = eElement.getElementsByTagName("LongMessage").item(0).getTextContent();
                 NodeList nList1 = eElement.getElementsByTagName("SourceLine");
                 Node nNode1 = nList1.item(2);
                 Element eElement1 = (Element) nNode1;
-
                 if (eElement1 == null)
                     continue;
-
-                findBugs.className = eElement1.getAttribute("classname");
-                findBugs.filePath = eElement1.getAttribute("sourcepath");
+                warning.className = eElement1.getAttribute("classname");
+                warning.filePath = eElement1.getAttribute("sourcepath");
                 String lineStart = eElement1.getAttribute("start");
                 String lineEnd = eElement1.getAttribute("end");
-                findBugs.lineNumber = lineStart + "-" + lineEnd;
-                findBugs.priority = eElement.getAttribute("priority");
+                warning.lineNumber = lineStart + "-" + lineEnd;
+                warning.priority = eElement.getAttribute("priority");
 
-                Integer priority = Integer.parseInt(findBugs.priority);
-                Integer rank = Integer.parseInt(eElement.getAttribute("rank"));
-                findBugs.severity = getSeverity(priority, rank); //Get severity using risk matrix
-
-                bugsList.add(findBugs);
+                int priority = Integer.parseInt(warning.priority);
+                int rank = Integer.parseInt(eElement.getAttribute("rank"));
+                warning.severity = getSeverity(priority, rank); //Get severity using risk matrix
+                bugsList.add(warning);
             }
         }
-
         return bugsList;
     }
 
-    public String getDescription(FindSecBugs findBugs) {
+    private String getDescription(FindSecBugsWarning warning) {
+        String scanDirRelPath = getScanDirectory().getAbsolutePath().
+                replaceFirst(new File(System.getProperty("user.dir")).getAbsolutePath(), "");
         StringBuilder description = new StringBuilder();
-
-        description.append("The following insecure code bugs were found in ").append("**[").append(findBugs.filePath).append("](").append(this.getBugAuditScanResult().getRepo().getWebUrl()).append("/tree/").append(this.getBugAuditScanResult().getRepo().getCommit()).append("/").append(findBugs.filePath).append("):**\n");
-        description.append(" * **Line:** ").append(findBugs.lineNumber).append("\n");
-        description.append(" * **Type:** ");
-        description.append(findBugs.bugType);
-        description.append("\n");
-        description.append(" * **Message:** ").append(findBugs.message).append("\n");
-        description.append(" * **Confidence:** ").append(findBugs.priority);
-
+        description.append("The following insecure code was found **[was found](");
+        description.append(this.getBugAuditScanResult().getRepo().getWebUrl());
+        description.append("/tree/").append(this.getBugAuditScanResult().getRepo().getCommit());
+        description.append("/").append(scanDirRelPath).append("/").append(warning.filePath).append("):**\n");
+        description.append(" * **Line:** ").append(warning.lineNumber).append("\n");
+        description.append(" * **Type:** ").append(warning.bugType).append("\n");
+        description.append(" * **Message:** ").append(warning.message).append("\n");
+        description.append(" * **Confidence:** ").append(warning.priority);
         return description.toString();
     }
 
-    private void addKeys(Bug bug, FindSecBugs findBugs) throws BugAuditException {
-        bug.addKey(findBugs.filePath);
-        bug.addKey(getBugAuditScanResult().getRepo() + "-" + findBugs.instanceHash);
+    private void addKeys(Bug bug, FindSecBugsWarning warning) throws BugAuditException {
+        bug.addKey(warning.filePath);
+        bug.addKey(getBugAuditScanResult().getRepo() + "-" + warning.instanceHash);
     }
 
     private void processFindSecBugsResult() throws IOException, SAXException, ParserConfigurationException, BugAuditException {
-        List<String> modulePaths = getModulePaths();    //Find the modules from parent pom.xml file
-
+        List<String> modulePaths = getModulePaths();
         for (String module : modulePaths) {
-
-            List<FindSecBugs> bugsList = getXMLValuesForBug(module);    //Get Bug details from XML
-
-            for (FindSecBugs issue : bugsList) {
-                String title = "FindSecBugs (" + issue.bugType + ") found in " + issue.filePath + getBugAuditScanResult().getRepo();//Example: FindSecBugs (OBJECT_DESERIALIZATION) found in org/owasp/webgoat/plugin/InsecureDeserializationTask.javabugaudit/bugaudit-cli
-                Bug bug = new Bug(title, issue.severity);   //Create new bug using title and severity!
+            List<FindSecBugsWarning> bugsList = getXMLValuesForBug(module);
+            for (FindSecBugsWarning issue : bugsList) {
+                String title = "Security warning (" + issue.bugType + ") found in " + issue.filePath + " of " +
+                        getBugAuditScanResult().getRepo();
+                Bug bug = new Bug(title, issue.severity);
                 bug.setDescription(new BugAuditContent(this.getDescription(issue)));
                 bug.addType(issue.bugType.replace(" ", "-"));
-                addKeys(bug, issue);    //Add hash so that the bug doesn't duplicate
-                result.addBug(bug); //The add bug function will create a bug in freshrelease using the details from env variables and from bug object values!
+                addKeys(bug, issue);
+                result.addBug(bug);
             }
         }
     }
 
-    private void runFindSecBugs() throws BugAuditException, InterruptedException, SAXException, ParserConfigurationException, IOException {
-        System.out.println("Running FindSecBugs!\n");
-
-        modifyXMLsForEnvironment();//Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
+    private void runFindSecBugs() throws BugAuditException, InterruptedException, IOException {
+        modifyXMLsForEnvironment();
         String buildScript = getBuildScript();
-        String command = "", extraArgument;
+        String extraArgument;
         if (buildScript == null)
             extraArgument = "";
         else {
             Pattern pattern = Pattern.compile("mvn clean install(.*)");
             Matcher matcher = pattern.matcher(buildScript);
-
             if (matcher.find()) {
                 extraArgument = matcher.group(1);
             } else {
                 extraArgument = "";
             }
         }
-
-        command = "mvn spotbugs:spotbugs" + extraArgument;
-
-        String spotBugsResponse = runCommand(command);  //The command should run from root pom.xml file location
-
-        if (!spotBugsResponse.contains("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
+        String command = "mvn spotbugs:spotbugs" + extraArgument;
+        String spotBugsResponse = runCommand(command);
+        if (!spotBugsResponse.contains("BUILD SUCCESS"))
             throw new BugAuditException("SpotBugs failed!");
     }
 
@@ -309,8 +255,8 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     @Override
     public void scan() throws Exception {
         if (!isParserOnly()) {
-            runFindSecBugs();   //Run the plugin and get XML result stored in target/SpotbugsXml.xml file
+            runFindSecBugs();
         }
-        processFindSecBugsResult(); //Process the XML file and convert them to bugs
+        processFindSecBugsResult();
     }
 }
