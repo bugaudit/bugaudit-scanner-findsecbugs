@@ -71,10 +71,13 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 }
             }
             String confidenceLevel = System.getenv(findSecBugsThresholdLevel);
-            if (confidenceLevel == null || confidenceLevel.isEmpty())
+            if (confidenceLevel == null || confidenceLevel.isEmpty()) {
                 confidenceLevel = "Low";
-            else
-                confidenceLevel = confidenceLevel.substring(0, 1).toUpperCase() + confidenceLevel.substring(1).toLowerCase();
+            } else {
+                confidenceLevel = confidenceLevel.substring(0, 1).toUpperCase() +
+                        confidenceLevel.toLowerCase().substring(1).toLowerCase();
+            }
+            System.out.println("Setting FindSecBugs confidence threshold level: " + confidenceLevel);
             String pluginStr = "<plugin>\n" +
                     "            <groupId>com.github.spotbugs</groupId>\n" +
                     "            <artifactId>spotbugs-maven-plugin</artifactId>\n" +
