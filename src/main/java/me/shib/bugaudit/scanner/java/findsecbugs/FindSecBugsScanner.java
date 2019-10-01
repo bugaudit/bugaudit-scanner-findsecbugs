@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
 
 public final class FindSecBugsScanner extends BugAuditScanner {
 
-    private static transient final Lang lang = Lang.Java;
+    private static transient final Lang scannerLang = Lang.Java;
     private static transient final String tool = "FindSecBugs";
     private static transient final String thresholdLevel = "FINDSECBUGS_CONFIDENCE_LEVEL";
     private static transient final int java_Maven = 1;
@@ -59,8 +59,8 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     }
 
     private void modifyXMLsForEnvironment(int buildType) throws FileNotFoundException, IOException {
-        String fileName="";
-        if(buildType == java_Maven)
+        String fileName = "";
+        if (buildType == java_Maven)
             fileName = "pom.xml";
         else
             fileName = "build.gradle";
@@ -134,9 +134,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
                 lines.add(position + 1, pluginStr);
                 Files.write(Paths.get(getScanDirectory() + File.separator + "pom.xml"), lines, StandardCharsets.UTF_8);
-            }
-            else
-            {
+            } else {
                 int position = 0;
 
                 String pluginStr = "\n\nallprojects {\n" +
@@ -162,7 +160,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                         "       ignoreFailures = true\n" +
                         "       reportsDir = file(\"$project.buildDir\")\n" +
                         "       effort = \"max\"\n" +
-                        "       reportLevel = \""+ confidenceLevel.toLowerCase() + "\"\n" +
+                        "       reportLevel = \"" + confidenceLevel.toLowerCase() + "\"\n" +
                         "       includeFilter = file(\"$rootProject.projectDir/spotbugs-security-include.xml\")\n" +
                         "       excludeFilter = file(\"$rootProject.projectDir/spotbugs-security-exclude.xml\")\n" +
                         "      }\n" +
@@ -173,13 +171,12 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                         "                    html.enabled = false\n" +
                         "            }\n" +
                         "        }\n" +
-                        "    }\n"   +
+                        "    }\n" +
                         "  }";
 
                 Files.write(Paths.get(getScanDirectory() + File.separator + fileName), pluginStr.getBytes(), StandardOpenOption.APPEND);
             }
-        }
-        else
+        } else
             throw new FileNotFoundException(fileName + "not found!");
     }
 
@@ -227,7 +224,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         File bugXML = new File(modulePath);
         List<FindSecBugsWarning> bugsList = new ArrayList<FindSecBugsWarning>();
 
-        if(!bugXML.exists())
+        if (!bugXML.exists())
             return bugsList;
 
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
@@ -250,36 +247,36 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
                 FindSecBugsWarning findBugs = new FindSecBugsWarning();   //Class object which contains the details of a bug!
 
-                if(nElement.hasAttribute("projectName"))
+                if (nElement.hasAttribute("projectName"))
                     findBugs.setModuleName(nElement.getAttribute("projectName"));
 
-                if(eElement.hasAttribute("type"))
+                if (eElement.hasAttribute("type"))
                     findBugs.setBugType(nElement.getAttribute("type"));
 
-                if(eElement.hasAttribute("instanceHash"))
+                if (eElement.hasAttribute("instanceHash"))
                     findBugs.setInstanceHash(nElement.getAttribute("instanceHash"));
 
-                if(eElement.hasAttribute("LongMessage"))
+                if (eElement.hasAttribute("LongMessage"))
                     findBugs.setMessage(eElement.getElementsByTagName("LongMessage").item(0).getTextContent());
 
                 NodeList nList1 = eElement.getElementsByTagName("SourceLine");
                 Node nNode1 = nList1.item(2);
                 Element eElement1 = (Element) nNode1;
 
-                if(eElement1 == null)
+                if (eElement1 == null)
                     continue;
 
-                if(eElement1.hasAttribute("classname"))
+                if (eElement1.hasAttribute("classname"))
                     findBugs.setClassName(eElement1.getAttribute("classname"));
 
-                if(eElement1.hasAttribute("sourcepath"))
+                if (eElement1.hasAttribute("sourcepath"))
                     findBugs.setFilePath(eElement1.getAttribute("sourcepath"));
 
-                String lineStart="",lineEnd="";
-                if(eElement1.hasAttribute("start"))
+                String lineStart = "", lineEnd = "";
+                if (eElement1.hasAttribute("start"))
                     lineStart = eElement1.getAttribute("start");
 
-                if(eElement1.hasAttribute("end"))
+                if (eElement1.hasAttribute("end"))
                     lineEnd = eElement1.getAttribute("end");
 
                 findBugs.setLineNumber(lineStart + "-" + lineEnd);
@@ -317,7 +314,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     }
 
     private void processFindSecBugsResult(int buildType) throws IOException, SAXException, ParserConfigurationException, BugAuditException, InterruptedException {
-        if(buildType == java_Maven) {
+        if (buildType == java_Maven) {
             List<String> modulePaths = getModulePaths();    //Find the modules from parent pom.xml file
 
             for (String module : modulePaths) {
@@ -333,15 +330,13 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     result.addBug(bug); //The add bug function will create a bug in freshrelease using the details from env variables and from bug object values!
                 }
             }
-        }
-        else if(buildType == java_Gradle)
-        {
+        } else if (buildType == java_Gradle) {
             String buildDirString = runCommand("gradle properties");
             Pattern pattern = Pattern.compile("buildDir: *(.*)"); //Example: <module>Billing</module>
             Matcher matcher = pattern.matcher(buildDirString);
 
-            String buildDir="";
-            if(matcher.find())
+            String buildDir = "";
+            if (matcher.find())
                 buildDir = matcher.group(1);
 
             List<FindSecBugsWarning> bugsList = getXMLValuesForBug(buildDir + "/findbugs.xml");
@@ -360,7 +355,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     private void runFindSecBugs(int buildType) throws BugAuditException, InterruptedException, SAXException, ParserConfigurationException, IOException {
         System.out.println("Running FindSecBugs!\n");
 
-        if( buildType == java_Maven) {
+        if (buildType == java_Maven) {
             modifyXMLsForEnvironment(java_Maven);//Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
             String buildScript = getBuildScript();
             String command = "", extraArgument;
@@ -383,15 +378,13 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
             if (!spotBugsResponse.contains("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
                 throw new BugAuditException("FindSecBugs failed!");
-        }
-        else if(buildType == java_Gradle)
-        {
+        } else if (buildType == java_Gradle) {
             modifyXMLsForEnvironment(java_Gradle);
 
             String command = "gradle findbugs";
             String findBugsResponse = runCommand(command);
 
-            if(!findBugsResponse.contains("BUILD SUCCESSFUL"))
+            if (!findBugsResponse.contains("BUILD SUCCESSFUL"))
                 throw new BugAuditException("FindSecBugs failed!");
 
         }
@@ -399,8 +392,8 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     }
 
     @Override
-    protected Lang getLang() {
-        return lang;
+    protected boolean isLangSupported(Lang lang) {
+        return lang == scannerLang;
     }
 
     @Override
@@ -412,7 +405,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     public void scan() throws Exception {
 
         int buildType;
-        if(new File(getScanDirectory() + File.separator + "pom.xml").exists())
+        if (new File(getScanDirectory() + File.separator + "pom.xml").exists())
             buildType = java_Maven;
         else
             buildType = java_Gradle;
