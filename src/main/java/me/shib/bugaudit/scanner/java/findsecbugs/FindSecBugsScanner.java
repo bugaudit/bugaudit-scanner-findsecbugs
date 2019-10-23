@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -238,6 +239,11 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         Node nNode = nList.item(0);
         Element nElement = (Element) nNode;
 
+        List<String> srcDirList = new ArrayList<String>();
+        nList = nElement.getElementsByTagName("SrcDir");
+        for(int temp=0; temp < nList.getLength();temp++)
+            srcDirList.add(nList.item(temp).getTextContent());
+
         nList = doc.getElementsByTagName("BugInstance");
         for (int temp = 0; temp < nList.getLength(); temp++) {
             nNode = nList.item(temp);
@@ -255,6 +261,8 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
                 if (eElement.hasAttribute("instanceHash"))
                     findBugs.setInstanceHash(nElement.getAttribute("instanceHash"));
+                else
+                    findBugs.setInstanceHash("");
 
                 if (eElement.hasAttribute("LongMessage"))
                     findBugs.setMessage(eElement.getElementsByTagName("LongMessage").item(0).getTextContent());
@@ -269,8 +277,22 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 if (eElement1.hasAttribute("classname"))
                     findBugs.setClassName(eElement1.getAttribute("classname"));
 
-                if (eElement1.hasAttribute("sourcepath"))
-                    findBugs.setFilePath(eElement1.getAttribute("sourcepath"));
+                if (eElement1.hasAttribute("sourcepath")) {
+                    if (!srcDirList.isEmpty()) {
+                        String sourcePath = eElement1.getAttribute("sourcepath");
+                        String[] srcDirArr = new String[srcDirList.size()];
+                        srcDirList.toArray(srcDirArr);
+
+                        for (int i = 0; i < srcDirArr.length; i++) {
+                            if (srcDirArr[i].contains(sourcePath))
+                                findBugs.setFilePath(srcDirArr[i]);
+                        }
+                    } else
+                        findBugs.setFilePath(eElement1.getAttribute("sourcepath"));
+
+                    if(findBugs.getFilePath() == null)
+                        continue;
+                }
 
                 String lineStart = "", lineEnd = "";
                 if (eElement1.hasAttribute("start"))
@@ -286,10 +308,14 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 Integer rank = Integer.parseInt(eElement.getAttribute("rank"));
                 findBugs.setSeverity(getSeverity(priority, rank)); //Get severity using risk matrix
 
+                if (findBugs.getInstanceHash().isEmpty()) {
+                    File bugFile = new File(findBugs.getFilePath());
+                    String instanceHash = getHash(bugFile, Integer.parseInt(lineStart),Integer.parseInt(lineEnd), findBugs.getBugType(), null);
+                    findBugs.setInstanceHash(instanceHash);
+                }
                 bugsList.add(findBugs);
             }
         }
-
         return bugsList;
     }
 
