@@ -20,9 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +31,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     private static transient final String thresholdLevel = "FINDSECBUGS_CONFIDENCE_LEVEL";
     private static transient final int java_Maven = 1;
     private static transient final int java_Gradle = 2;
+    public static List<String> modulePaths;
 
     private BugAuditScanResult result;
 
@@ -40,6 +39,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         super();
         this.getBugAuditScanResult().addKey("SAST-Warning");
         this.result = getBugAuditScanResult();
+        this.modulePaths = new ArrayList<String>();
     }
 
     protected String readFromFile(File file) throws IOException {
@@ -59,41 +59,49 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         pw.close();
     }
 
-    private void modifyXMLsForEnvironment(int buildType) throws FileNotFoundException, IOException {
+    private void modifyXMLsForEnvironment(File directory,int buildType) throws FileNotFoundException, IOException, SAXException, ParserConfigurationException {
         String fileName = "";
-        if (buildType == java_Maven)
+        if (buildType == java_Maven){
             fileName = "pom.xml";
+            List<String> modules = getModulePaths(directory);
+            if(!modules.isEmpty()){
+                for (String module : modules) {
+                    modifyXMLsForEnvironment(new File(module), java_Maven);
+                }
+            }
+        }
         else
             fileName = "build.gradle";
 
-        //The corresponding two files is used to tell spotbugs to report only security bugs and not others!
-        File excludeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-exclude.xml");
-        String excludeFileContents = "<FindBugsFilter>\n" +
-                "</FindBugsFilter>";
-
-        if (!excludeFile.exists())
-            writeToFile(excludeFileContents, excludeFile);
-        else
-            System.out.println("Exclude file already present!");
-
-        File includeFile = new File(getScanDirectory() + File.separator + "spotbugs-security-include.xml");
-        System.out.println(includeFile.getAbsolutePath());
-        String includeFileContents = "<FindBugsFilter>\n" +
-                "    <Match>\n" +
-                "        <Bug category=\"SECURITY\"/>\n" +
-                "    </Match>\n" +
-                "</FindBugsFilter>";
-
-        if (!includeFile.exists())
-            writeToFile(includeFileContents, includeFile);
-        else
-            System.out.println("Include file already present!");
-
         //Used to append spotbugs maven plugin to pom.xml file
-        File buildFile = new File(getScanDirectory() + File.separator + fileName);
+        File buildFile = new File(directory + File.separator + fileName);
 
         System.out.println(buildFile.getAbsolutePath());
         if (buildFile.exists()) {
+            this.modulePaths.add(directory.getAbsolutePath());
+            //The corresponding two files is used to tell spotbugs to report only security bugs and not others!
+            File excludeFile = new File(directory + File.separator + "spotbugs-security-exclude.xml");
+            String excludeFileContents = "<FindBugsFilter>\n" +
+                    "</FindBugsFilter>";
+
+            if (!excludeFile.exists())
+                writeToFile(excludeFileContents, excludeFile);
+            else
+                System.out.println("Exclude file already present!");
+
+            File includeFile = new File(directory + File.separator + "spotbugs-security-include.xml");
+            System.out.println(includeFile.getAbsolutePath());
+            String includeFileContents = "<FindBugsFilter>\n" +
+                    "    <Match>\n" +
+                    "        <Bug category=\"SECURITY\"/>\n" +
+                    "    </Match>\n" +
+                    "</FindBugsFilter>";
+
+            if (!includeFile.exists())
+                writeToFile(includeFileContents, includeFile);
+            else
+                System.out.println("Include file already present!");
+
             List<String> lines = Files.readAllLines(buildFile.toPath(), StandardCharsets.UTF_8);
 
             String confidenceLevel = System.getenv(thresholdLevel);
@@ -103,14 +111,6 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                 confidenceLevel = confidenceLevel.substring(0, 1).toUpperCase() + confidenceLevel.substring(1).toLowerCase();
 
             if (fileName == "pom.xml") {
-                int position = 0;
-
-                for (String str : lines) {
-                    if (str.trim().contains("<plugins>")) {
-                        position = lines.indexOf(str);
-                        break;
-                    }
-                }
 
                 String pluginStr = "<plugin>\n" +
                         "            <groupId>com.github.spotbugs</groupId>\n" +
@@ -133,9 +133,76 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                         "            </configuration>\n" +
                         "        </plugin>";
 
-                lines.add(position + 1, pluginStr);
-                Files.write(Paths.get(getScanDirectory() + File.separator + "pom.xml"), lines, StandardCharsets.UTF_8);
-            } else {
+                boolean buildNode = false, pluginsNode = false;
+                DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+                DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+
+                Document doc = dBuilder.parse(buildFile);
+                doc.getDocumentElement().normalize();
+
+                Element nElement = doc.getDocumentElement();
+                Node childNode = nElement.getFirstChild();
+
+                while (childNode.getNextSibling() != null) {
+                    childNode = childNode.getNextSibling();
+                    if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                        Element childElement = (Element) childNode;
+                        if (childElement.getNodeName() == "build") {
+                            buildNode = true;
+                            Node nChildNode = childNode.getFirstChild();
+                            while (nChildNode.getNextSibling() != null) {
+                                nChildNode = nChildNode.getNextSibling();
+                                if (nChildNode.getNodeType() == Node.ELEMENT_NODE) {
+                                    if (nChildNode.getNodeName() == "plugins")
+                                        pluginsNode = true;
+                                }
+                            }
+
+                        }
+                    }
+                }
+
+                if (buildNode && pluginsNode) {
+                    for (ListIterator<String> it = lines.listIterator(); it.hasNext(); ) {   //find Plugins and place the spotbugs plugin
+                        String str = it.next();
+                        if (str.trim().contains("<plugins>")) {
+                            it.add(pluginStr);
+                        }
+                    }
+                } else if (buildNode && !pluginsNode) {
+                    String tempStr = pluginStr;
+                    pluginStr = "<plugins>\n" +
+                            tempStr +
+                            "   </plugins>\n";
+
+                    for (ListIterator<String> it = lines.listIterator(); it.hasNext(); ) {   //find Plugins and place the spotbugs plugin
+                        String str = it.next();
+                        if (str.trim().contains("<build>")) {
+                            it.add(pluginStr);
+                        }
+                    }
+
+                } else {
+                    String tempStr = pluginStr;
+                    pluginStr = "<build>\n" +
+                            "   <plugins>\n" +
+                            tempStr +
+                            "   </plugins>\n" +
+                            "</build>";
+
+                    int position = 0;
+                    for (String str : lines) {
+                        if (str.trim().contains("</project>")) {
+                            position = lines.indexOf(str);
+                            break;
+                        }
+                    }
+                    lines.add(position, pluginStr);
+                }
+
+                Files.write(Paths.get(directory + File.separator + "pom.xml"), lines, StandardCharsets.UTF_8);
+            }
+        else {
                 int position = 0;
 
                 String pluginStr = "\n\nallprojects {\n" +
@@ -181,21 +248,17 @@ public final class FindSecBugsScanner extends BugAuditScanner {
             throw new FileNotFoundException(fileName + "not found!");
     }
 
-    private List<String> getModulePaths() throws IOException {
+    private List<String> getModulePaths(File directory) throws IOException {
         List<String> modulePaths = new ArrayList<>();
-        File file = new File(getScanDirectory() + File.separator + "pom.xml");
+        File file = new File(directory + File.separator + "pom.xml");
         String contents = readFromFile(file);
         Pattern pattern = Pattern.compile("<module>(.*)</module>");
         Matcher matcher = pattern.matcher(contents);
-        if (matcher.find()) {
-            while (matcher.find()) {
-                String module = matcher.group(1);
-                String path = getScanDirectory() + File.separator + module + "/target/spotbugsXml.xml";
 
-                modulePaths.add(path);
-            }
-        } else {
-            String path = getScanDirectory() + File.separator + "target/spotbugsXml.xml";
+        while (matcher.find()) {
+            String module = matcher.group(1);
+            String path = directory + File.separator + module;
+
             modulePaths.add(path);
         }
 
@@ -257,10 +320,10 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     findBugs.setModuleName(nElement.getAttribute("projectName"));
 
                 if (eElement.hasAttribute("type"))
-                    findBugs.setBugType(nElement.getAttribute("type"));
+                    findBugs.setBugType(eElement.getAttribute("type"));
 
                 if (eElement.hasAttribute("instanceHash"))
-                    findBugs.setInstanceHash(nElement.getAttribute("instanceHash"));
+                    findBugs.setInstanceHash(eElement.getAttribute("instanceHash"));
                 else
                     findBugs.setInstanceHash("");
 
@@ -278,7 +341,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
                     findBugs.setClassName(eElement1.getAttribute("classname"));
 
                 if (eElement1.hasAttribute("sourcepath")) {
-                    if (!srcDirList.isEmpty()) {
+                    if (!srcDirList.isEmpty() && srcDirList.size() != 1) {
                         String sourcePath = eElement1.getAttribute("sourcepath");
                         String[] srcDirArr = new String[srcDirList.size()];
                         srcDirList.toArray(srcDirArr);
@@ -320,13 +383,12 @@ public final class FindSecBugsScanner extends BugAuditScanner {
     }
 
     private String getDescription(FindSecBugsWarning warning) {
-        String scanDirRelPath = getScanDirectory().getAbsolutePath().
-                replaceFirst(new File(System.getProperty("user.dir")).getAbsolutePath(), "");
+        //String scanDirRelPath = getScanDirectory().getAbsolutePath().replaceFirst(new File(System.getProperty("user.dir")).getAbsolutePath(), "");
         StringBuilder description = new StringBuilder();
         description.append("The following insecure code was found **[was found](");
         description.append(this.getBugAuditScanResult().getRepo().getWebUrl());
         description.append("/tree/").append(this.getBugAuditScanResult().getRepo().getCommit());
-        description.append("/").append(scanDirRelPath).append("/").append(warning.getFilePath()).append("):**\n");
+        //description.append("/").append(scanDirRelPath).append("/").append(warning.getFilePath()).append("):**\n");
         description.append(" * **Line:** ").append(warning.getLineNumber()).append("\n");
         description.append(" * **Type:** ").append(warning.getBugType()).append("\n");
         description.append(" * **Message:** ").append(warning.getMessage()).append("\n");
@@ -341,10 +403,8 @@ public final class FindSecBugsScanner extends BugAuditScanner {
 
     private void processFindSecBugsResult(int buildType) throws IOException, SAXException, ParserConfigurationException, BugAuditException, InterruptedException {
         if (buildType == java_Maven) {
-            List<String> modulePaths = getModulePaths();    //Find the modules from parent pom.xml file
-
             for (String module : modulePaths) {
-
+                module += File.separator + "target" + File.separator + "spotbugsXml.xml";
                 List<FindSecBugsWarning> bugsList = getXMLValuesForBug(module);    //Get Bug details from XML
 
                 for (FindSecBugsWarning issue : bugsList) {
@@ -382,7 +442,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
         System.out.println("Running FindSecBugs!\n");
 
         if (buildType == java_Maven) {
-            modifyXMLsForEnvironment(java_Maven);//Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
+            modifyXMLsForEnvironment(getScanDirectory(),java_Maven);//Need to add two additional XML's to find only security bugs and also have to add the plugin in pom.xml file
             String buildScript = getBuildScript();
             String command = "", extraArgument;
             if (buildScript == null)
@@ -405,7 +465,7 @@ public final class FindSecBugsScanner extends BugAuditScanner {
             if (!spotBugsResponse.contains("BUILD SUCCESS")) //If spotbugs build failed,throw BugAuditException!
                 throw new BugAuditException("FindSecBugs failed!");
         } else if (buildType == java_Gradle) {
-            modifyXMLsForEnvironment(java_Gradle);
+            modifyXMLsForEnvironment(getScanDirectory(),java_Gradle);
 
             String command = "gradle findbugs";
             String findBugsResponse = runCommand(command);
